@@ -202,7 +202,7 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         *)
             echo "Invalid command line flag $1" >&2
-            return 1
+            exit 1
             ;;
     esac
     shift
