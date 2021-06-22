@@ -23,10 +23,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ETCD_SERVER_PORT="2379"
-ETCD_PEER_CERT="/etc/etcd/peer.crt"
-ETCD_PEER_KEY="/etc/etcd/peer.key"
-ETCD_PEER_CACERT="/etc/etcd/ca.crt"
+ETCD_ENDPOINTS=${ETCDCTL_ENDPOINTS:-https://127.0.0.1:2379}
+ETCD_PEER_CERT="${ETCDCTL_CERT:-}"
+ETCD_PEER_KEY="${ETCDCTL_KEY:-}"
+ETCD_PEER_CACERT="${ETCDCTL_CACERT:-}"
+ETCD_USER="${ETCDCTL_USER:-}"
+ETCD_PASSWORD="${ETCDCTL_PASSWORD:-}"
+ETCD_INSECURE_TRANSPORT=${ETCDCTL_INSECURE_TRANSPORT:-true}
+ETCD_SKIP_TLS_VERIFY=${ETCDCTL_SKIP_TLS_VERIFY:-false}
+
+NAGIOS_WARNING=""
+NAGIOS_CRITICAL=""
 
 OUTPUT_MSG="UNKNOWN"
 EXIT_CODE=3
@@ -35,13 +42,38 @@ usage(){
 
     echo \
 "
-Usage: $0 [command] <hostname>
+NAME:
+	check_etcd - Nagios Module for Check ETCD Database
 
-Available Commands:
-    cluster-health      Get Etcd cluster health
-    alpr                Get Average Latency Per Request
+USAGE:
+	$0 [flags]
+
+COMMANDS:
+    cluster-health                     Get Etcd cluster health
+    alpr                               Get Average Latency Per Request
+
+OPTIONS:
+    --endpoint=[127.0.0.1:2379]		     gRPC endpoints
+    --cacert=\"\"                      verify certificates of TLS-enabled secure servers using this CA bundle
+    --cert=\"\"                        identify secure client using this TLS certificate file
+    --key=\"\"                         identify secure client using this TLS key file
+    --user=\"\"                        username[:password] for authentication (prompt if password is not supplied)
+    --password=\"\"                    password for authentication (if this option is used, --user option shouldn't include password)
+    --insecure-transport[=true]		     disable transport security for client connections
+    --insecure-skip-tls-verify[=false] skip server certificate verification (CAUTION: this option should be enabled only for testing purposes)
+-w, --warning                          nagios warning threshold
+-c, --critical                         nagios cricial threshold
+ENV VARS:
+    ETCD_ENDPOINTS
+    ETCD_PEER_CERT
+    ETCD_PEER_KEY
+    ETCD_PEER_CACERT
 "
     exit 3
+}
+
+get_endpoint_host(){
+  echo $(echo "${ETCD_ENDPOINTS}"|sed -E 's/^\s*.*:\/\///g')
 }
 
 
@@ -64,12 +96,12 @@ get-alpr(){
   # WARNING: 0.1s <= average_latency_per_request < 1s
   # CRITICAL: average_latency_per_request >= 1s
 
-  average_latency_per_request=$(etcd-benchmark --cert ${ETCD_PEER_CERT} --key ${ETCD_PEER_KEY} --cacert ${ETCD_PEER_CACERT} --endpoints ${ETCD_SERVER_ADDR}:${ETCD_SERVER_PORT} --conns=1 --clients=1 range /dummy --consistency=l --total=1 | awk '/.*Average/  { print $2 }')
+  average_latency_per_request=$($HOME/go/bin/benchmark --cert ${ETCD_PEER_CERT} --key ${ETCD_PEER_KEY} --cacert ${ETCD_PEER_CACERT} --endpoints $(get_endpoint_host) --conns=1 --clients=1 range /dummy --consistency=l --total=1 | awk '/.*Average/  { print $2 }')
 
-  if [ $(echo "$average_latency_per_request < 0.1" | bc -l) -eq 1 ]; then
+  if [ $(echo "$average_latency_per_request < ${NAGIOS_WARNING:-0.1}" | bc -l) -eq 1 ]; then
     OUTPUT_MSG="OK - Average Latency Per Request: ${average_latency_per_request} secs"
     EXIT_CODE=0
-  elif [ $(echo "($average_latency_per_request >= 0.1) && ($average_latency_per_request < 1)" | bc -l) -eq 1 ]; then
+  elif [ $(echo "($average_latency_per_request >= ${NAGIOS_WARNING:-0.1}) && ($average_latency_per_request < ${NAGIOS_CRITICAL:-1})" | bc -l) -eq 1 ]; then
     OUTPUT_MSG="WARNING - Average Latency Per Request: ${average_latency_per_request} secs"
     EXIT_CODE=1
   else
@@ -83,11 +115,15 @@ get-alpr(){
 # We assume that the server is listening to the standard port 2379 and the TLS certs and key are named as follow.
 get-cluster-health(){
 
-  etcdctl --cert-file ${ETCD_PEER_CERT} \
-          --key-file ${ETCD_PEER_KEY} \
-          --ca-file ${ETCD_PEER_CACERT} \
-          --endpoints https://${ETCD_SERVER_ADDR}:${ETCD_SERVER_PORT} \
-          cluster-health > $TMP_FILE
+  etcdctl --cert=${ETCD_PEER_CERT} \
+          --key=${ETCD_PEER_KEY} \
+          --cacert=${ETCD_PEER_CACERT} \
+          --endpoints=${ETCD_ENDPOINTS} \
+          --user=${ETCD_USER} \
+          --password=${ETCD_PASSWORD} \
+          --insecure-transport=${ETCD_INSECURE_TRANSPORT} \
+          --insecure-skip-tls-verify=${ETCD_SKIP_TLS_VERIFY} \
+          endpoint health > $TMP_FILE
 
   # Get the check command return code
   etcd_check_cluster_rc=$?
@@ -110,14 +146,67 @@ get-cluster-health(){
 #
 # main()
 #
-# Exit with error if the etcd server name is not passed as argument to the script
-if [ $# -ne 2 ]; then
+# Exit with error if no args
+if [ $# -eq 0 ]; then
   usage
   exit 3
 fi
 
 COMMAND_NAME=$1
-ETCD_SERVER_ADDR=$2
+
+shift
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --endpoint)
+            shift
+            ETCD_ENDPOINTS=${1}
+            ;;
+        --cacert)
+            shift
+            ETCD_PEER_CACERT=${1}
+            ;;
+        --key)
+            shift
+            ETCD_PEER_KEY=${1}
+            ;;
+        --cert)
+            shift
+            ETCD_PEER_CERT=${1}
+            ;;
+        --user)
+            shift
+            ETCD_USER=${1}
+            ;;
+        --password)
+            shift
+            ETCD_PASSWORD=${1}
+            ;;
+        --insecure-transport)
+            shift
+            ETCD_INSECURE_TRANSPORT=${1}
+            ;;
+        --insecure-skip-tls-verify)
+            shift
+            ETCD_SKIP_TLS_VERIFY=${1}
+            ;;
+        
+        -w \
+       | --warning )
+            shift
+            NAGIOS_WARNING=${1}
+            ;;
+        -c \
+       | --critical)
+            shift
+            NAGIOS_CRITICAL=${1}
+            ;;
+        *)
+            echo "Invalid command line flag $1" >&2
+            return 1
+            ;;
+    esac
+    shift
+done
 
 setup
 
