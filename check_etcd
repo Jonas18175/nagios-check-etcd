@@ -64,10 +64,10 @@ OPTIONS:
 -w, --warning                          nagios warning threshold
 -c, --critical                         nagios cricial threshold
 ENV VARS:
-    ETCD_ENDPOINTS
-    ETCD_PEER_CERT
-    ETCD_PEER_KEY
-    ETCD_PEER_CACERT
+    ETCDCTL_ENDPOINTS
+    ETCDCTL_CERT
+    ETCDCTL_KEY
+    ETCDCTL_CACERT
 "
     exit 3
 }
