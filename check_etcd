@@ -133,7 +133,7 @@ get-health(){
   echo $etcd_check_cluster_rc
 
   # Prepare output message according to the cluster state
-  if [ $(grep -Fxc ' is healthy' $TMP_FILE) -eq 1 ] && [ $etcd_check_cluster_rc -eq 0  ]; then
+  if [ $(grep -Fc ' is healthy' $TMP_FILE) -eq 1 ] && [ $etcd_check_cluster_rc -eq 0  ]; then
     OUTPUT_MSG="OK - ETCD state: healthy"
     EXIT_CODE=0
   else
