@@ -115,10 +115,11 @@ get-alpr(){
 # We assume that the server is listening to the standard port 2379 and the TLS certs and key are named as follow.
 get-cluster-health(){
 
-  etcdctl --cert=${ETCD_PEER_CERT} \
-          --key=${ETCD_PEER_KEY} \
-          --cacert=${ETCD_PEER_CACERT} \
-          --endpoints=${ETCD_ENDPOINTS} \
+    ETCDCTL_ENDPOINTS=${ETCD_ENDPOINTS} \
+    ETCDCTL_CERT="${ETCD_PEER_CERT}" \
+    ETCDCTL_KEY="${ETCD_PEER_KEY}" \
+    ETCDCTL_CACERT="${ETCD_PEER_CACERT}" \
+      etcdctl --cert=${ETCD_PEER_CERT} \
           --user=${ETCD_USER} \
           --password=${ETCD_PASSWORD} \
           --insecure-transport=${ETCD_INSECURE_TRANSPORT} \
