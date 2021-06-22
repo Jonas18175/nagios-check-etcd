@@ -49,7 +49,7 @@ USAGE:
 	$0 [flags]
 
 COMMANDS:
-    cluster-health                     Get Etcd cluster health
+    health                             Get Etcd cluster health
     alpr                               Get Average Latency Per Request
 
 OPTIONS:
@@ -111,9 +111,9 @@ get-alpr(){
 
 }
 
-# Check the cluster status.
+# Check the status.
 # We assume that the server is listening to the standard port 2379 and the TLS certs and key are named as follow.
-get-cluster-health(){
+get-health(){
 
     ETCDCTL_ENDPOINTS=${ETCD_ENDPOINTS} \
     ETCDCTL_CERT="${ETCD_PEER_CERT}" \
@@ -129,17 +129,12 @@ get-cluster-health(){
   # Get the check command return code
   etcd_check_cluster_rc=$?
 
-  # Get cluster members if OK
-  if [ $etcd_check_cluster_rc -eq 0 ]; then
-    etcd_cluster_members=$(cat $TMP_FILE | awk '$1 ~ /^member/ { print $NF }' | sed -e :a -e '$!N; s/\n/,/; ta')
-  fi
-
   # Prepare output message according to the cluster state
-  if [ $(grep -Fxc 'cluster is healthy' $TMP_FILE) -eq 1 ] && [ $etcd_check_cluster_rc -eq 0  ]; then
-    OUTPUT_MSG="OK - Cluster state: healthy | Members=${etcd_cluster_members}"
+  if [ $(grep -Fxc ' is healthy' $TMP_FILE) -eq 1 ] && [ $etcd_check_cluster_rc -eq 0  ]; then
+    OUTPUT_MSG="OK - ETCD state: healthy"
     EXIT_CODE=0
   else
-    OUTPUT_MSG="CRITICAL - Cluster state: unhealthy"
+    OUTPUT_MSG="CRITICAL - ETCD state: unhealthy"
     EXIT_CODE=2
   fi
 }
@@ -211,8 +206,8 @@ done
 
 setup
 
-if [ $COMMAND_NAME == "cluster-health" ]; then
-  get-cluster-health
+if [ $COMMAND_NAME == "health" ]; then
+  get-health
 elif [ $COMMAND_NAME == "alpr" ]; then
   get-alpr
 fi
