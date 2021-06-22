@@ -119,7 +119,7 @@ get-cluster-health(){
     ETCDCTL_CERT="${ETCD_PEER_CERT}" \
     ETCDCTL_KEY="${ETCD_PEER_KEY}" \
     ETCDCTL_CACERT="${ETCD_PEER_CACERT}" \
-      etcdctl --cert=${ETCD_PEER_CERT} \
+      etcdctl \
           --user=${ETCD_USER} \
           --password=${ETCD_PASSWORD} \
           --insecure-transport=${ETCD_INSECURE_TRANSPORT} \
