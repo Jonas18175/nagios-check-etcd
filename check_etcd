@@ -38,6 +38,9 @@ NAGIOS_CRITICAL=""
 OUTPUT_MSG="UNKNOWN"
 EXIT_CODE=3
 
+# PATH FIX for NRPE
+LOCAL_PATH="$HOME/go/bin:/usr/bin:/usr/local/bin:/bin:/sbin/:/usr/sbin/:$PATH"
+
 usage(){
 
     echo \
@@ -96,7 +99,7 @@ get-alpr(){
   # WARNING: 0.1s <= average_latency_per_request < 1s
   # CRITICAL: average_latency_per_request >= 1s
 
-  average_latency_per_request=$($HOME/go/bin/benchmark --cert ${ETCD_PEER_CERT} --key ${ETCD_PEER_KEY} --cacert ${ETCD_PEER_CACERT} --endpoints $(get_endpoint_host) --conns=1 --clients=1 range /dummy --consistency=l --total=1 | awk '/.*Average/  { print $2 }')
+  average_latency_per_request=$(PATH=$LOCAL_PATH benchmark --cert ${ETCD_PEER_CERT} --key ${ETCD_PEER_KEY} --cacert ${ETCD_PEER_CACERT} --endpoints $(get_endpoint_host) --conns=1 --clients=1 range /dummy --consistency=l --total=1 | awk '/.*Average/  { print $2 }')
 
   if [ $(echo "$average_latency_per_request < ${NAGIOS_WARNING:-0.1}" | bc -l) -eq 1 ]; then
     OUTPUT_MSG="OK - Average Latency Per Request: ${average_latency_per_request} secs"
@@ -114,7 +117,7 @@ get-alpr(){
 # Check the status.
 # We assume that the server is listening to the standard port 2379 and the TLS certs and key are named as follow.
 get-health(){
-
+    PATH=$LOCAL_PATH \
     ETCDCTL_ENDPOINTS=${ETCD_ENDPOINTS} \
     ETCDCTL_CERT="${ETCD_PEER_CERT}" \
     ETCDCTL_KEY="${ETCD_PEER_KEY}" \
